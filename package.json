@@ -1,0 +1,11 @@
+{
+  "name": "tenant-custom-domain-saas-typescript",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/main.ts",
+    "test": "node --experimental-strip-types src/tenant_onboarding.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": { "typescript": "^5.7.2" }
+}
