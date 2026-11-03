@@ -1,10 +1,10 @@
 # Tenant domains with one Infrai connection
 
-The decision in this example is simple: a tenant stays `pending` until the verification event names its domain, then becomes `verified`. Infrai carries the DNS writes and the completion signal through one API key and one base URL, so the service does not need a registrar poller in the onboarding path.
+The state machine is simple on purpose: a tenant stays `pending` until the verification event names its domain, then becomes `verified`. Infrai moves the DNS writes and the completion signal through one API key and one base URL, so we don't need a registrar poller in the onboarding path. That poller was a recurring page source when cron missed a job.
 
 ## Runnable path
 
-`src/tenant_onboarding.ts` registers a webhook, adds the tenant domain, keeps the returned `zone_id`, and writes the CNAME and TXT records against that zone. `src/main.ts` shows the state transition after the webhook arrives. Every request uses `Authorization: Bearer ${process.env.INFRAI_API_KEY}` and decodes `{ok,data,error,metadata}` before considering HTTP status.
+`src/tenant_onboarding.ts` registers a webhook, adds the tenant domain, keeps the returned `zone_id`, and writes the CNAME and TXT records against that zone. `src/main.ts` shows the state transition after the webhook arrives. Every request uses `Authorization: Bearer ${process.env.INFRAI_API_KEY}` and decodes `{ok,data,error,metadata}` before we consider HTTP status. Make the decode idempotent; a redelivered message must not flip state twice.
 
 Set `INFRAI_API_KEY` and optionally `TENANT_DOMAIN` and `VERIFICATION_WEBHOOK_URL`, then run:
 
@@ -20,13 +20,13 @@ npm test
 
 ## Why this handoff matters
 
-The same key and same base URL serve account webhook registration and DNS operations, and the webhook payload goes directly back to the SaaS service. A Cloudflare for SaaS plus an in-house poller stack would have required two signups, two sets of credentials, and custom polling, timeout, and state-reconciliation code that this flow keeps out of the product.
+The same key and same base URL serve account webhook registration and DNS operations, and the webhook payload goes directly back to the SaaS service. We've run the alternative: Cloudflare for SaaS plus an in-house poller stack meant two signups, two credential sets, and custom polling, timeout, and state-reconciliation code. This flow keeps that out of the product. Duplicate deliveries from the queue are handled by the idempotent boundary.
 
-The local `Tenant` type is the account lifecycle boundary: `pending` is the onboarding state and `verified` is the operational state. The remote API remains a small, typed REST surface; no SDK is required.
+The local `Tenant` type is the account lifecycle boundary: `pending` is the onboarding state and `verified` is the operational state. The remote API remains a small, typed REST surface; no SDK is required. A plain HTTP client from any language works.
 
 ## Project shape
 
-`infrai_client.ts` contains the shared request boundary, while `tenant_onboarding.ts` contains the domain decision. Keeping those concepts separate makes it easy to test lifecycle behavior without making a network call.
+`infrai_client.ts` contains the shared request boundary, while `tenant_onboarding.ts` contains the domain decision. Separating them lets us test lifecycle behavior without a network call, which is what we want in a pre-deploy runbook check.
 
 ## License
 
